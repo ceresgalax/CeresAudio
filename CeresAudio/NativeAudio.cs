@@ -41,11 +41,11 @@ namespace CeresAudio
 
         public State State => na_get_stream_state(_context);
         
-        public NativeAudio(IntPtr cubeb, ref StreamParams outputStreamParams, uint latencyFrames)
+        public NativeAudio(Cubeb cubeb, ref StreamParams outputStreamParams, uint latencyFrames)
         {
             unsafe {
                 fixed (void* osp = &outputStreamParams) {
-                    _context = na_new_context(cubeb, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, new IntPtr(osp), latencyFrames);        
+                    _context = na_new_context(cubeb.Handle, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, new IntPtr(osp), latencyFrames);        
                 }
             }
             
