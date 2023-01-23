@@ -1,0 +1,91 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net6.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+    
+    <PropertyGroup>
+        <CeresCubebNativeVersion>1.0.3</CeresCubebNativeVersion>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="CeresCubeb-native" Version="$(CeresCubebNativeVersion)" />
+    </ItemGroup>
+    
+    <ItemGroup>
+        <NativeAudioSrcFiles Include="$(MSBuildThisFileDirectory)\..\nativeaudio\**\*" />
+    </ItemGroup>
+
+    <PropertyGroup>
+        <NativeAudioBuildDir>$(MSBuildThisFileDirectory)\..\nativeaudiobuild</NativeAudioBuildDir>
+    </PropertyGroup>
+    
+    <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+        <NativeAudioRidOs>osx</NativeAudioRidOs>
+        <NativeAudioCubebLib>libcubeb.dylib</NativeAudioCubebLib>
+        <NativeAudioLibFilename>libnativeaudio.dylib</NativeAudioLibFilename>
+    </PropertyGroup>
+    <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Win'))">
+        <NativeAudioRidOs>win</NativeAudioRidOs>
+        <NativeAudioCubebLib>cubeb.lib</NativeAudioCubebLib>
+        <NativeAudioLibFilename>nativeaudio.dll</NativeAudioLibFilename>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'X64'">
+        <CmakeOsxArchitectures>x86_64</CmakeOsxArchitectures>
+        <NativeAudioRid>$(NativeAudioRidOs)-x64</NativeAudioRid>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'ARM64'">
+        <CmakeOsxArchitectures>arm64</CmakeOsxArchitectures>
+        <NativeAudioRid>$(NativeAudioRidOs)-arm64</NativeAudioRid>
+    </PropertyGroup>
+    
+    <PropertyGroup>
+        <NativeAudioLibOutputPath>..\runtimes\$(NativeAudioRid)\native\$(NativeAudioLibFilename)</NativeAudioLibOutputPath>
+    </PropertyGroup>
+    
+    <Target Name="NativeAudioInner" Inputs="@(NativeAudioSrcFiles)" Outputs="$(NativeAudioLibOutputPath)">
+        <MakeDir Directories="$(NativeAudioBuildDir)" />
+        <Exec WorkingDirectory="$(NativeAudioBuildDir)" Command="cmake ../nativeaudio &quot;-DCMAKE_OSX_ARCHITECTURES=$(CmakeOsxArchitectures)&quot; -DBUILD_SHARED_LIBS=true -DCMAKE_RELEASE_TYPE=Release &quot;-DCUBEB_LIB_PATH=$(NuGetPackageRoot)cerescubeb-native\$(CeresCubebNativeVersion)\runtimes\$(NativeAudioRid)\native\$(NativeAudioCubebLib)&quot;" />
+        <Exec WorkingDirectory="$(NativeAudioBuildDir)" Command="cmake --build . --config Release -j" />
+        <MakeDir Directories="..\runtimes\$(NativeAudioRid)\native" />
+        <Copy SourceFiles="$(NativeAudioBuildDir)\$(NativeAudioLibFilename)" DestinationFiles="$(NativeAudioLibOutputPath)" />
+    </Target>
+
+    <Target Name="NativeAudio" BeforeTargets="BeforeBuild;DispatchToInnerBuilds">
+        <!--TargetFramework=once is critical here, as msbuild will not execute a task from same project with same properties twice. -->
+        <MSBuild Projects="$(MSBuildProjectFile)" Targets="NativeAudioInner" Properties="TargetFramework=once" />
+    </Target>
+    
+    <ItemGroup Condition="'$(NativeAudioRid)' == 'win-x64'">
+        <Content Include="..\runtimes\win-x64\native\nativeaudio.dll">
+            <PackagePath>runtimes/win-x64/native/nativeaudio.dll</PackagePath>
+            <Pack>true</Pack>
+            <CopyToOutputDirectory Condition="$([MSBuild]::IsOSPlatform('Win'))">PreserveNewest</CopyToOutputDirectory>
+            <CopyToOutputDirectory Condition="!$([MSBuild]::IsOSPlatform('Win'))">Never</CopyToOutputDirectory>
+            <Link>runtimes/win-x64/native/%(Filename)%(Extension)</Link>
+        </Content>
+    </ItemGroup>
+    <ItemGroup Condition="'$(NativeAudioRid)' == 'osx-arm64'">
+        <Content Include="..\runtimes\osx-arm64\native\libnativeaudio.dylib">
+            <PackagePath>runtimes/osx-arm64/native/libnativeaudio.dylib</PackagePath>
+            <Pack>true</Pack>
+            <CopyToOutputDirectory Condition="$([MSBuild]::IsOSPlatform('OSX'))">PreserveNewest</CopyToOutputDirectory>
+            <CopyToOutputDirectory Condition="!$([MSBuild]::IsOSPlatform('OSX'))">Never</CopyToOutputDirectory>
+            <Link>runtimes/osx-arm64/native/%(Filename)%(Extension)</Link>
+        </Content>
+    </ItemGroup>
+    <ItemGroup Condition="'$(NativeAudioRid)' == 'osx-x64'">
+        <Content Include="..\runtimes\osx-x64\native\libnativeaudio.dylib">
+            <PackagePath>runtimes/osx-x64/native/libnativeaudio.dylib</PackagePath>
+            <Pack>true</Pack>
+            <CopyToOutputDirectory Condition="$([MSBuild]::IsOSPlatform('OSX'))">PreserveNewest</CopyToOutputDirectory>
+            <CopyToOutputDirectory Condition="!$([MSBuild]::IsOSPlatform('OSX'))">Never</CopyToOutputDirectory>
+            <Link>runtimes/osx-x64/native/%(Filename)%(Extension)</Link>
+        </Content>
+    </ItemGroup>
+    
+</Project>
