@@ -69,8 +69,8 @@
         <Content Include="..\runtimes\win-x64\native\nativeaudio.dll">
             <PackagePath>runtimes/win-x64/native/nativeaudio.dll</PackagePath>
             <Pack>true</Pack>
-            <CopyToOutputDirectory Condition="$([MSBuild]::IsOSPlatform('Win'))">PreserveNewest</CopyToOutputDirectory>
-            <CopyToOutputDirectory Condition="!$([MSBuild]::IsOSPlatform('Win'))">Never</CopyToOutputDirectory>
+            <CopyToOutputDirectory Condition="$([MSBuild]::IsOSPlatform('Windows'))">PreserveNewest</CopyToOutputDirectory>
+            <CopyToOutputDirectory Condition="!$([MSBuild]::IsOSPlatform('Windows'))">Never</CopyToOutputDirectory>
             <Link>runtimes/win-x64/native/%(Filename)%(Extension)</Link>
         </Content>
     </ItemGroup>
