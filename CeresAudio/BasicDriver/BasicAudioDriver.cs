@@ -1,45 +1,49 @@
 ﻿using System.Diagnostics;
-using CeresAudio;
 using CeresAudio.CubebBinding;
 
-namespace Example;
+namespace CeresAudio.BasicDriver;
 
-public interface IAudioRenderer
-{
-    
-}
+/// <summary>
+/// Populate the given samples buffer with the next <see cref="numSamples"/> samples to output.
+/// </summary>
+/// <param name="samples">The samples buffer to write to.</param>
+/// <param name="numSamples">Number of samples. Will always be a multiple of CHANNELS</param>
+/// <returns>The number of samples actually populated in the samples buffer.</returns>
+public delegate int RenderFunc(float[] samples, int numSamples);
 
+/// <summary>
+/// A basic 'driver' for an application using CeresAudio to output audio.
+/// The source code of this class is meant as an example of how to user the CeresAudio API.
+/// However, this class should also be perfectly usable for a basic audio output use cases.
+/// </summary>
 public sealed class BasicAudioDriver : IDisposable
 {
+    public const int CHANNELS = 2;
+    
+    private RenderFunc _renderer;
+    private readonly Action<string>? _logFunc;
     private readonly Cubeb _cubeb;
     private readonly CubebStream _cubebStream;
     private readonly NativeAudio _na;
-        
     private readonly uint _sampleRate;
-    //private readonly MixingSampleProvider _mixer; // MixingSamplerProvider is thread safe, so we don't need to worry about locking it.
-    
-    const int CHANNELS = 2;
-    
     private bool _isRunning;
     private readonly object _isRunningLock = new();
-    private readonly Thread _mixerThread;
-    private float _nextSleepTimeCheck;
+    private readonly Thread _renderThread;
     
-    public TimeSpan PreviousSleepTimeTotal { get; private set; }
+    private readonly float[] _dataBuffer = new float[1024 * CHANNELS];
 
     // TODO: Dynamically adjust during runtime -- If buffer underflow, but high sleep time in audio worker, increase update interval.
     private double _updateInterval = 1.0 / 240.0;
     private double _targetLatency = 1.0 / 30.0;
-        
-    public BasicAudioDriver()
-    {
-        _cubeb = new Cubeb("CeresGameKit", null);
-        _sampleRate = _cubeb.GetPreferredSampleRate();
 
-        Console.WriteLine("AudioSystem: Sample Rate: " + _sampleRate);
-            
-        //_mixer = new MixingSampleProvider(WaveFormat.CreateIeeeFloatWaveFormat((int)_sampleRate, CHANNELS));
-        //_mixer.ReadFully = true;
+    public uint SampleRate => _sampleRate;
+        
+    public BasicAudioDriver(Action<string>? logFunc = null)
+    {
+        _renderer = (_, _) => 0;
+        _logFunc = logFunc;
+        _cubeb = new Cubeb("CeresAudioBasicAudioDriver", null);
+        _sampleRate = _cubeb.GetPreferredSampleRate();
             
         StreamParams outputParams = new StreamParams {
             Channels = CHANNELS,
@@ -52,9 +56,9 @@ public sealed class BasicAudioDriver : IDisposable
         _na = new NativeAudio(_cubeb, ref outputParams, _cubeb.GetMinLatency(ref outputParams));
         _cubebStream = _na.Stream;
 
-        _mixerThread = new Thread(MixerThreadLoop);
-        _mixerThread.IsBackground = true;
-        _mixerThread.Priority = ThreadPriority.AboveNormal;
+        _renderThread = new Thread(MixerThreadLoop);
+        _renderThread.IsBackground = true;
+        _renderThread.Priority = ThreadPriority.AboveNormal;
     }
 
     public void Dispose()
@@ -62,26 +66,29 @@ public sealed class BasicAudioDriver : IDisposable
         lock (_isRunningLock) {
             _isRunning = false;
         }
-        _mixerThread.Join();
+        _renderThread.Join();
 
         _cubebStream.Dispose();
         _cubeb.Dispose();
     }
 
-    public void Start()
+    public void Start(RenderFunc renderFunc)
     {
-        _cubebStream.Start();
-
         lock (_isRunningLock) {
+            if (_isRunning) {
+                throw new InvalidOperationException("Cannot call Start, the driver is already running.");
+            }
             _isRunning = true;
         }
-        _mixerThread.Start();
+
+        _renderer = renderFunc;
+        _cubebStream.Start();
+        _renderThread.Start();
     }
     
     private void MixerThreadLoop()
     {
         Stopwatch stopwatch = new();
-        TimeSpan sleepTime = TimeSpan.Zero;
         
         while (true) {
             stopwatch.Restart();
@@ -94,11 +101,10 @@ public sealed class BasicAudioDriver : IDisposable
 
             Update();
 
-            sleepTime = TimeSpan.FromSeconds(_updateInterval) - stopwatch.Elapsed;
+            TimeSpan sleepTime = TimeSpan.FromSeconds(_updateInterval) - stopwatch.Elapsed;
             if (sleepTime.TotalMilliseconds > 1) {
                 Thread.Sleep(sleepTime);
             }
-
             
         }
     }
@@ -115,7 +121,7 @@ public sealed class BasicAudioDriver : IDisposable
         uint currentLatency = capacity - freeSpace;
 
         if (currentLatency == 0) {
-            Console.WriteLine(nameof(BasicAudioDriver) + ".Update: Buffer was empty!");
+            _logFunc?.Invoke(nameof(BasicAudioDriver) + ".Update: Buffer was empty!");
         }
 
         double currentLatencySeconds = currentLatency / (double)(_sampleRate * CHANNELS);
@@ -130,33 +136,24 @@ public sealed class BasicAudioDriver : IDisposable
         int numSamplesMixed = 0;
             
         while (numSamplesMixed < numSamplesToMix) {
-            int bufferedLength = Math.Min(_dataBuffer.Length, (int)(numSamplesToMix - numSamplesMixed));
-            // Note: 'samplesRead' is a total of all samples from all channels.
-            // For stereo, 1 cubeb sample == 2 mixer samples. ugh.
-            int samplesRead = _mixer.Read(_dataBuffer, 0, bufferedLength);
+            int bufferedLength = Math.Min(_dataBuffer.Length, numSamplesToMix - numSamplesMixed);
+            int samplesRead = _renderer(_dataBuffer, bufferedLength);
             if (samplesRead == 0) {
                 break;
             }
             
             uint samplesPushed = _na.Push<float>(_dataBuffer, (uint)samplesRead);
             if (samplesPushed < samplesRead) {
-                Console.WriteLine("Buffer full");
+                _logFunc?.Invoke("Buffer full");
             }
-                
-            //Console.WriteLine($"Pushed {lenPushed} / {samplesRead}");
             
             numSamplesMixed += samplesRead;
         }
             
         if (_na.State == State.DRAINED) {
-            Console.WriteLine("Re-starting stream");
-            // TODO: Calling stop in this state crashes on windows. -- Cubeb bug?
-            //_cubebStream.Stop();
+            _logFunc?.Invoke("Re-starting stream");
             _cubebStream.Start();
         }
-            
     }
-
-    private readonly float[] _dataBuffer = new float[1024 * CHANNELS];
         
 }
