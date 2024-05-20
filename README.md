@@ -3,7 +3,7 @@ CeresAudio is a simple .NET library for cross-platform audio output. It heavily 
 library. 
 
 Instead of simply providing C# bindings for cubeb, CeresAudio instead implements cubeb audio callbacks and a
-ring buffer in C, allowing for the audio callback to run with a little latency as possible.
+ring buffer in C, allowing for the audio callback to run with as little latency as possible.
 CeresAudio provides a simple thread-safe C# interface for filling this ring buffer with rendered audio.
 
 # Usage
@@ -41,7 +41,7 @@ na.Dispose();
 ```
 
 ## Using the high-level BasicAudioDriver
-The BasicAudioDriver class is included as reference material for how to write an audio driver using CeresAudio.
+The source code of the BasicAudioDriver class is included as reference for how to write an audio driver using CeresAudio.
 It can also be used as an out-of-the-box audio driver for your application.
 ```c#
 //
@@ -75,20 +75,19 @@ multiple audio sources. You can use `MixingSampleProvider` and call `mixingSampl
 in your render func to output mixed audio.  
 
 # Using CeresAudio in your .NET project.
-Currently, the best way to use CeresAudio in a .NET project is to clone this repository as a git submodule or copy the
-CeresAudio source files into your project, and include the CeresAudio .csproj in your solution.
+Currently, the best way to use CeresAudio is to clone this repository as a git submodule or copy the
+CeresAudio source files into your project, and then include the CeresAudio .csproj in your solution.
 
 When including CeresAudio this way, you will need to have `cmake` installed so that the native code can be compiled.
 
-In the future, I would like to maintain NuGet packages with the native code included. This would make CeresAudio very 
-easy to integrate into .NET projects.
+In the future, I would like to maintain NuGet packages with the native code included.
 
 # FAQ
 
-**Q: Why not implement c# bindings for the audio callback and just pause the garbage collector during the callback?**
+**Q: Why not implement C# bindings for the Cubeb audio callback and just pause the garbage collector during the callback?**
 
 A: I attempted this at first, but interop between native and .NET was still very expensive. 
 I was also not able to find a bulletproof way to prevent garbage collection from occuring.
 Note that this may be improved in newer versions of the .NET runtime. However, having as little latency as possible is
-still the goal for the cubeb audio callback, so keeping the audio callback outside of .NET keeps this callback function
+ideal for the cubeb audio callback, so keeping the audio callback outside of .NET keeps this callback function
 as performant as possible.
