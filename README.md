@@ -82,6 +82,12 @@ When including CeresAudio this way, you will need to have `cmake` installed so t
 
 In the future, I would like to maintain NuGet packages with the native code included.
 
+NOTE: While CeresAudio.csproj builds the native code in `nativeaudio`, it pulls pre-built cubeb libraries from NuGet.
+The build process and pinned version of cubeb for those binaries can be found [here](https://github.com/ceresgalax/CubebPrebuiltNuget).
+I can understand the concern about using executable files from an obscure NuGet package, so I will welcome any pull request
+which makes it easier to build this library against user-supplied cubeb libraries, or adds an option to build the
+cubeb libraries along with the `nativeaudio` library.
+
 # FAQ
 
 **Q: Why not implement C# bindings for the Cubeb audio callback and just pause the garbage collector during the callback?**
