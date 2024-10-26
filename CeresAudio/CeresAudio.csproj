@@ -22,22 +22,23 @@
     </ItemGroup>
 
     <PropertyGroup>
-        <NativeAudioBuildDir>$(MSBuildThisFileDirectory)\..\nativeaudiobuild</NativeAudioBuildDir>
-        <NativeAudioBuildOutputDir>$(NativeAudioBuildDir)</NativeAudioBuildOutputDir>
+        <NativeSourceDirectory>$(MSBuildThisFileDirectory)..\nativeaudio</NativeSourceDirectory>
+<!--        <NativeAudioBuildDir>$(MSBuildThisFileDirectory)\..\nativeaudiobuild</NativeAudioBuildDir>-->
+<!--        <NativeAudioBuildOutputDir>$(NativeAudioBuildDir)</NativeAudioBuildOutputDir>-->
     </PropertyGroup>
 
     <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))" >
         <BuildableRid Include="win-x64">
             <CubebLib>cubeb.lib</CubebLib>
             <LibFilename>nativeaudio.dll</LibFilename>
-            <BuildOutputDir>$(NativeAudioBuildDir)\Release</BuildOutputDir>
+            <BuildOutputDir>Release\</BuildOutputDir>
         </BuildableRid>
     </ItemGroup>
     <ItemGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))" >
         <BuildableRid Include="osx-x64;osx-arm64">
             <CubebLib>libcubeb.dylib</CubebLib>
             <LibFilename>libnativeaudio.dylib</LibFilename>
-            <BuildOutputDir>$(NativeAudioBuildDir)</BuildOutputDir>
+            <BuildOutputDir />
         </BuildableRid>
     </ItemGroup>
     
@@ -48,12 +49,23 @@
             <CmakeOsxArchitectures Condition="'%(BuildableRid.Identity)' == 'osx-x64'">x86_64</CmakeOsxArchitectures>
             <CmakeOsxArchitectures Condition="'%(BuildableRid.Identity)' == 'osx-arm64'">arm64</CmakeOsxArchitectures>
         </PropertyGroup>
+
+        <PropertyGroup>
+            <BuildDir>$(IntermediateOutputPath)build_%(BuildableRid.Identity)\</BuildDir>
+            <BuildOutputDir>$(IntermediateOutputPath)build_%(BuildableRid.Identity)\%(BuildableRid.BuildOutputDir)</BuildOutputDir>
+        </PropertyGroup>
         
-        <MakeDir Directories="$(NativeAudioBuildDir)" />
-        <Exec WorkingDirectory="$(NativeAudioBuildDir)" Command="cmake ../nativeaudio &quot;-DCMAKE_OSX_ARCHITECTURES=$(CmakeOsxArchitectures)&quot; -DBUILD_SHARED_LIBS=true -DCMAKE_RELEASE_TYPE=Release &quot;-DCUBEB_LIB_PATH=$(NuGetPackageRoot)cerescubeb-native\$(CeresCubebNativeVersion)\runtimes\%(BuildableRid.Identity)\native\%(BuildableRid.CubebLib)&quot;" />
-        <Exec WorkingDirectory="$(NativeAudioBuildDir)" Command="cmake --build . --config Release -j" />
-        <MakeDir Directories="..\runtimes\%(BuildableRid.Identity)\native" />
-        <Copy SourceFiles="%(BuildableRid.BuildOutputDir)\%(BuildableRid.LibFilename)" DestinationFiles="..\runtimes\%(BuildableRid.Identity)\native\%(BuildableRid.LibFilename)" />
+        <MakeDir Directories="$(BuildDir)" />
+        <Exec WorkingDirectory="$(BuildDir)" Command="cmake &quot;$(NativeSourceDirectory)&quot; &quot;-DCMAKE_OSX_ARCHITECTURES=$(CmakeOsxArchitectures)&quot; -DBUILD_SHARED_LIBS=true -DCMAKE_RELEASE_TYPE=Release &quot;-DCUBEB_LIB_PATH=$(NuGetPackageRoot)cerescubeb-native\$(CeresCubebNativeVersion)\runtimes\%(BuildableRid.Identity)\native\%(BuildableRid.CubebLib)&quot;" />
+        <Exec WorkingDirectory="$(BuildDir)" Command="cmake --build . --config Release -j" />
+        
+        <MakeDir Directories="$(MSBuildThisFileDirectory)..\runtimes\%(BuildableRid.Identity)\native" />
+        <Copy SourceFiles="$(BuildOutputDir)%(BuildableRid.LibFilename)" DestinationFiles="$(MSBuildThisFileDirectory)..\runtimes\%(BuildableRid.Identity)\native\%(BuildableRid.LibFilename)" />
+        
+        <ItemGroup>
+            <FileWrites Include="$(BuildDir)\**\*" />
+        </ItemGroup>
+        
     </Target>
 
     <Target Name="NativeAudio" BeforeTargets="BeforeBuild;DispatchToInnerBuilds">
